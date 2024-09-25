@@ -317,6 +317,9 @@ sub read_http_socket {
             "[$sclient] SIP HTTP backend returned unusable data: $content");
         # treat this as a non-fatal condition.
         return 1;
+    } else {
+        #ml: no need to resend if HTTP socket times out, we've got a valid response
+        $self->prev_sip_message(0);
     }
 
     # avoid relaying, initiate cleanup
