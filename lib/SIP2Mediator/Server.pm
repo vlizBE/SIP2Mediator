@@ -165,13 +165,6 @@ sub cleanup_http_socket {
         # Should never get here, but avoid crashing the server just in case.
         syslog(LOG_WARNING => "[$sclient] HTTP socket disappeared ".$self->seskey);
     }
-
-    if ($self->sip_socket) {
-        # Normally the SIP socket is shut down first, initiated by the
-        # SIP client.  However, if there's an HTTP hiccup, HTTP may be
-        # shut down first, so go ahead and cleanup the SIP socket.
-        $self->cleanup_sip_socket(1);
-    }
 }
 
 sub seskey {
@@ -249,9 +242,11 @@ sub relay_sip_request {
     my $sclient = $self->sip_socket_str;
 
     if (!$self->http_socket) {
-        # Should never get here, but avoid crashing the server in case.
-        syslog(LOG_WARNING => "[$sclient] SIP socket disapeared ".$self->seskey);
-        return 0;
+        # http timeout happenend, we need to re-create the http socket
+        syslog(LOG_WARNING => "[$sclient] HTTP socket disapeared ".$self->seskey);
+        # ml: no need to resend prev_sip_message, we've got a new one
+        $self->prev_sip_message(0);
+        $self->create_http_socket;
     }
 
     my $post = sprintf('session=%s&message=%s',
@@ -320,6 +315,9 @@ sub read_http_socket {
     } else {
         #ml: no need to resend if HTTP socket times out, we've got a valid response
         $self->prev_sip_message(0);
+        syslog(LOG_WARNING => "received http response, cleared prev_sip_message, cleaning up http socket");
+        #ml: close http connection after response
+        $self->cleanup_http_socket;
     }
 
     # avoid relaying, initiate cleanup
